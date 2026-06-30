@@ -1,22 +1,94 @@
 .Stage {
   padding: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.Panel {
+  color: rgb(255,255,255);
+  min-width: 260px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.Status {
+  font-size: 1.1rem;
+  margin: 0;
+  font-family: sans-serif;
+}
+
+.Section h3 {
+  margin: 0 0 0.4rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(255,255,255);
+  font-family: sans-serif;
+}
+
+.PgnText {
+  background: rgba(0, 0, 0, 0.35);
+  color: rgb(215, 215, 215);
+  padding: 0.6rem 0.8rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  min-height: 120px;
+  font-family: sans-serif;
+}
+
+.PgnInput {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgb(224, 224, 224);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  font-family: sans-serif;
+  resize: vertical;
+}
+
+.PgnInput::placeholder {
+  color: rgba(196, 196, 196, 0.4);
+}
+
+.ErrorText {
+  color: #ff2828;
+  font-size: 0.82rem;
+  margin: 0.3rem 0 0 0;
+}
+
+.ButtonRow {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.ButtonRow button {
+  padding: 0.4rem 1rem;
+  background: rgb(255,255,255);
+  color: rgb(0,0,0);
+  border: 1px solid rgb(0, 0, 0);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: sans-serif;
+  font-size: 0.85rem;
+}
+
+.ButtonRow button:hover {
+  background: rgb(215,215,215);
 }
 
 .BoardFrame {
-  padding: 18px;
-  background: linear-gradient(
-    160deg,
-    #7a4520 0%,
-    #3d1f08 25%,
-    #5c3214 55%,
-    #3a1c07 80%,
-    #6b3e1c 100%
-  );
-  border-radius: 3px;
+  padding: 2px;
+  border-radius: 12px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 0 40px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(80, 40, 10, 0.6),
-    0 35px 100px rgba(0, 0, 0, 0.85),
     0 15px 40px rgba(0, 0, 0, 0.6);
 }
