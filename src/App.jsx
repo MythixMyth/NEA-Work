@@ -44,11 +44,28 @@ function App() {
   // Trying a move to see if it is viable, a legal move.
   function tryMove(fromSquare, toSquare) {
     const GameCopy = copyGame()
-    const Move = GameCopy.move({ from: fromSquare, to: toSquare, promotion: 'q' }) // Promote to a queen preset until I extend this onto a choice.
+    let Move = null
+    try {
+      Move = GameCopy.move({ from: fromSquare, to: toSquare, promotion: 'q' }) // Promote to a queen preset until I extend this onto a choice.
+    } catch (error) {
+      Move = null // chess.js throws on illegal moves instead of returning null, so treat that as "not a move"
+    }
     if (Move) {
       setGame(GameCopy)
       setSelectedSquare(null)
       setLegalMoveSquares([])
+      return true
+    }
+    return false
+  }
+
+  // Selects a square and shows its legal moves, if it holds a piece belonging to the side to move.
+  function selectSquare(square) {
+    const Piece = Game.get(square)
+    if (Piece && Piece.color === Game.turn()) {
+      setSelectedSquare(square)
+      const Moves = Game.moves({ square, verbose: true })
+      setLegalMoveSquares(Moves.map((m) => m.to))
       return true
     }
     return false
@@ -59,6 +76,13 @@ function App() {
     return tryMove(dropInfo.sourceSquare, dropInfo.targetSquare)
   }
 
+  // chessboard calls onPieceDrag with { isSparePiece, piece, square } as soon as a drag begins
+  function onPieceDrag(dragInfo) {
+    if (dragInfo.isSparePiece || !dragInfo.square) return
+    if (Game.isGameOver()) return
+    selectSquare(dragInfo.square)
+  }
+
   // calls onSquareClick with { piece, square }
   function onSquareClick(clickInfo) {
     const ClickedSquare = clickInfo.square
@@ -66,24 +90,12 @@ function App() {
 
     if (SelectedSquare) {
       const Moved = tryMove(SelectedSquare, ClickedSquare)
-      if (!Moved) {
-        const Piece = Game.get(ClickedSquare)
-        if (Piece && Piece.color === Game.turn()) {
-          setSelectedSquare(ClickedSquare)
-          const Moves = Game.moves({ square: ClickedSquare, verbose: true })
-          setLegalMoveSquares(Moves.map((m) => m.to))
-        } else {
-          setSelectedSquare(null)
-          setLegalMoveSquares([])
-        }
+      if (!Moved && !selectSquare(ClickedSquare)) {
+        setSelectedSquare(null)
+        setLegalMoveSquares([])
       }
     } else {
-      const Piece = Game.get(ClickedSquare)
-      if (Piece && Piece.color === Game.turn()) {
-        setSelectedSquare(ClickedSquare)
-        const Moves = Game.moves({ square: ClickedSquare, verbose: true })
-        setLegalMoveSquares(Moves.map((m) => m.to))
-      }
+      selectSquare(ClickedSquare)
     }
   }
 
@@ -122,10 +134,11 @@ function App() {
     id: 'ChessCoachBoard',
     position: Game.fen(),
     onPieceDrop,
+    onPieceDrag,
     onSquareClick,
     squareStyles: SquareStyles,
     boardStyle: { borderRadius: '12px', cursor: 'pointer' },
-    darkSquareStyle: { backgroundColor: '#2c567c' },
+    darkSquareStyle: { backgroundColor: '#7a2e95' },
     lightSquareStyle: { backgroundColor: '#ffffff' },
   }
 
