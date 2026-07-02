@@ -86,6 +86,33 @@
   background: rgb(215,215,215);
 }
 
+.ButtonRow .ModeButtonActive {
+  background: rgb(122, 46, 149);
+  color: rgb(255, 255, 255);
+  border: 1px solid rgb(122, 46, 149);
+}
+
+.ButtonRow .ModeButtonActive:hover {
+  background: rgb(140, 60, 168);
+}
+
+.BotStrength {
+  margin-top: 0.8rem;
+}
+
+.BotStrength input {
+  width: 100%;
+  accent-color: rgb(122, 46, 149);
+  cursor: pointer;
+}
+
+.BotStageText {
+  color: rgb(215, 215, 215);
+  font-size: 0.85rem;
+  font-family: sans-serif;
+  margin: 0.3rem 0 0 0;
+}
+
 .BoardFrame {
   padding: 2px;
   border-radius: 12px;

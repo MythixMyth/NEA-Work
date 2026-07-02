@@ -1,7 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Chess } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
 import './App.css'
+
+/*
+  Using an array for bot levels, holding Dictionary for Stage, Elo.
+  I might add more stages since beginners may be TRUE beginners to chess as a whole rather than
+  beginners to competitive scenes.
+*/
+const BotLevels = [
+  { Stage: 'Beginner', Elo: 1320 },
+  { Stage: 'Beginner', Elo: 1550 },
+  { Stage: 'Intermediate', Elo: 1850 },
+  { Stage: 'Advanced', Elo: 2250 },
+  { Stage: 'Advanced', Elo: 2750 },
+]
 
 function App() {
   // Game variable for handling the chess-game logic (referenced throughout the code therefore a global var) 
@@ -13,6 +26,10 @@ function App() {
   const [PgnInput, setPgnInput] = useState('')
   const [LoadError, setLoadError] = useState('')
   const [BoardWidth, setBoardWidth] = useState(480) // Default 480x480 boardsize.
+  const [GameMode, setGameMode] = useState('local') // string-union local/bot
+  const [BotLevel, setBotLevel] = useState(3) // level ranging from 1->5
+  const [BotThinking, setBotThinking] = useState(false) // controlled via bot logic + gameplay loop.
+  const EngineRef = useRef(null) // Reactive Reference to the engine object for stockfish.
 
   useEffect(() => { // This is reactive effectant for devices with different aspectratios or sizes than the base 1920x1080
     function updateBoardWidth() {
@@ -25,6 +42,56 @@ function App() {
     window.addEventListener('resize', updateBoardWidth)
     return () => window.removeEventListener('resize', updateBoardWidth)
   }, [])
+
+  useEffect(() => { // Reactive effectant coordinating stockfish engine reference.
+    if (GameMode !== 'bot') return
+    if (EngineRef.current) return
+    const Engine = new Worker('/stockfish-18-lite-single.js')
+    Engine.postMessage('uci')
+    Engine.postMessage('setoption name UCI_LimitStrength value true')
+    EngineRef.current = Engine
+  }, [GameMode])
+
+  useEffect(() => { // Reactive effectant controlling engine BEHAVIOR in-game for example reacting to moves - with elo coordinating.
+    if (GameMode !== 'bot') return
+    if (Game.turn() !== 'b') return
+    if (Game.isGameOver()) return
+    const Engine = EngineRef.current
+    if (!Engine) return
+
+    setBotThinking(true)
+
+    function handleEngineMessage(event) {
+      const Line = String(event.data)
+      if (!Line.startsWith('bestmove')) return
+      const MoveText = Line.split(' ')[1]
+      const GameCopy = copyGame()
+      let Move = null
+      try {
+        Move = GameCopy.move({
+          from: MoveText.slice(0, 2),
+          to: MoveText.slice(2, 4),
+          promotion: MoveText.slice(4) || 'q',
+        })
+      } catch (error) {
+        Move = null
+      }
+      if (Move) {
+        setGame(GameCopy)
+        setBotThinking(false)
+      }
+    }
+
+    Engine.addEventListener('message', handleEngineMessage)
+    Engine.postMessage('setoption name UCI_Elo value ' + BotLevels[BotLevel - 1].Elo)
+    Engine.postMessage('position fen ' + Game.fen())
+    Engine.postMessage('go movetime 800')
+
+    return () => {
+      Engine.removeEventListener('message', handleEngineMessage)
+      Engine.postMessage('stop')
+    }
+  }, [Game, GameMode])
 
   // early return demon
   function getStatusMessage() {
@@ -43,6 +110,7 @@ function App() {
 
   // Trying a move to see if it is viable, a legal move.
   function tryMove(fromSquare, toSquare) {
+    if (GameMode === 'bot' && Game.turn() === 'b') return false
     const GameCopy = copyGame()
     let Move = null
     try {
@@ -61,6 +129,7 @@ function App() {
 
   // Selects a square and shows its legal moves, if it holds a piece belonging to the side to move.
   function selectSquare(square) {
+    if (GameMode === 'bot' && Game.turn() === 'b') return false
     const Piece = Game.get(square)
     if (Piece && Piece.color === Game.turn()) {
       setSelectedSquare(square)
@@ -84,6 +153,7 @@ function App() {
   }
 
   // calls onSquareClick with { piece, square }
+  // Abstracted logic from previous to a "selectSquare" function to share with onPieceDrag
   function onSquareClick(clickInfo) {
     const ClickedSquare = clickInfo.square
     if (Game.isGameOver()) return
@@ -120,6 +190,13 @@ function App() {
     setLegalMoveSquares([])
     setPgnInput('')
     setLoadError('')
+    setBotThinking(false)
+  }
+
+  function switchMode(newMode) {
+    if (newMode === GameMode) return
+    setGameMode(newMode)
+    resetGame()
   }
   // Hashmap for [squares] indexed with their styling data. Used to show highlights or errored squares (In the future for blinking illegal attempts)
   const SquareStyles = {}
@@ -151,7 +228,40 @@ function App() {
       </div>
 
       <div className="Panel">
-        <p className="Status">{getStatusMessage()}</p>
+        <p className="Status">{BotThinking ? 'Bot is thinking...' : getStatusMessage()}</p>
+
+        <div className="Section">
+          <h3>Opponent</h3>
+          <div className="ButtonRow">
+            <button
+              className={GameMode === 'local' ? 'ModeButtonActive' : ''}
+              onClick={() => switchMode('local')}
+            >
+              Local
+            </button>
+            <button
+              className={GameMode === 'bot' ? 'ModeButtonActive' : ''}
+              onClick={() => switchMode('bot')}
+            >
+              Bot
+            </button>
+          </div>
+          {GameMode === 'bot' && (
+            <div className="BotStrength">
+              <input
+                type="range"
+                min="1"
+                max="5"
+                step="1"
+                value={BotLevel}
+                onChange={(e) => setBotLevel(Number(e.target.value))}
+              />
+              <p className="BotStageText">
+                Level {BotLevel} of 5 — {BotLevels[BotLevel - 1].Stage}
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="Section">
           <h3>PGN</h3>
