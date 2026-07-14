@@ -64,4 +64,4 @@ Research notes - custom engine (moved out of CustomEngine.js comments to keep th
 - The material advantage display from Zaki's note (captured piece SVGs) is still TODO - the eval bar covers "who is winning" for now.
 
 # Release 0.5
-- Realised ScoreCP is a bit inappropriate, changed it to ScoreCentripawn
+- Realised ScoreCP is a bit inappropriate, changed it to Centipawn
