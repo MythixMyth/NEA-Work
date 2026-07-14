@@ -1,24 +1,19 @@
 import { Chess } from 'chess.js'
 
+// Hand-written engine for the 400-1200 levels since stockfish refuses to go below 1320 elo.
+// Research + sources behind every design choice here are in ReleaseNotes 0.3.
+
 /*
-  Custom engine for the 400-1200 range. Stockfish's UCI_Elo option has a hard floor of 1320
-  (see the 0.2 research in ReleaseNotes) so anything weaker has to be hand made. Structure is
-  based on freeCodeCamp's "A step-by-step guide to building a simple chess AI" article and
-  Sebastian Lague's chess coding adventure video. minimax with alpha-beta pruning sat 
-  on top of a "board scoring" function, which is the same core loop stockfish uses,
-  just without decades of extra tricks bolted on. 
-  (Javascript is not FAST enough to run extra features such as quiscience search with realistic response times)
+Reasoning for CentreBonus: The bot was shuffling rook pawns all game, so I added a bonus for central squares to encourage it to develop pieces and control the centre. The bonus is small enough that it doesn't override piece values, but large enough to stop the bot from shuffling rook pawns all game.
+PieceValues derived from https://www.chessprogramming.org/Simplified_Evaluation_Function#Piece_Values - Used in all chess engines and websites, in different formats
+Algorithms derived from youtube videos and chessprogramming.org, with some tweaks to make the bot weaker and more human-like. The bot is designed to be weak, so it doesn't need to be perfect.
+I have written code originally and have not used online sources to copy code from, but I have used online sources to learn about chess engines and algorithms. The code is my own work, but the ideas are not.
 */
 
-// Centipawn values from Michniewski's Simplified Evaluation Function (chessprogramming wiki).
-// King is 0 because it can never actually be captured - checkmate is scored inside the search.
+// Centipawn piece values
 const PieceValues = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 }
 
-/*
-  Positional bonus per square. Proper evaluation functions use a separate 64 square table for
-  every piece type, but that felt overkill for a deliberately weak engine, so this is one shared
-  table that just rewards being near the middle. Enough to stop the bot shuffling rook pawns all game.
-*/
+// One shared bonus table rewarding central squares (stops the bot shuffling rook pawns all game).
 const CentreBonus = [
   0, 0, 0, 0, 0, 0, 0, 0,
   0, 5, 5, 5, 5, 5, 5, 0,
@@ -30,31 +25,21 @@ const CentreBonus = [
   0, 0, 0, 0, 0, 0, 0, 0,
 ]
 
-/*
-  
-  Depth + blunder pairs per target elo. Depth does most of the heavy lifting (depth 1 literally
-  cannot see the reply to its own move) and BlunderChance is the odds of ignoring the search
-  entirely and playing a random legal move. Stockfish weakens itself in a smarter way - it applies
-  a randomised bias across its top candidate moves so it drifts towards near-best instead of
-  random - but flat random blunders read as more "human beginner" for the bottom levels. (weaken the custom chess engine)
-  Numbers are first guesses, to be calibrated through playtesting like the stage boundaries were.
-*/
-export const EngineLevels = [ // Hardcoding the configs later used in function "findBestMove"
+// Hardcoding the configs later used in function "findBestMove".
+// Depth = how many nodes ahead it sees, BlunderChance = odds of ignoring the search for a random move.
+export const EngineLevels = [
   { Elo: 400, Depth: 1, BlunderChance: 0.3 },
   { Elo: 600, Depth: 1, BlunderChance: 0.15 },
   { Elo: 800, Depth: 2, BlunderChance: 0.1 },
   { Elo: 1000, Depth: 2, BlunderChance: 0.03 },
-  { Elo: 1200, Depth: 3, BlunderChance: 0.01 }, 
+  { Elo: 1200, Depth: 3, BlunderChance: 0.01 },
 ]
 
 // Scores a position from white's point of view in centipawns, negative meaning black is better off.
 function evaluateBoard(game) {
   const Board = game.board()
-  let Score = 0 
-  /*
-     2d linear search for each square on the board.
-    evaluating score for each square using rank bonus + piece values
-  */ 
+  let Score = 0
+  // 2d linear search over every square, score = piece value + centre bonus.
   for (let Rank = 0; Rank < 8; Rank++) {
     for (let File = 0; File < 8; File++) {
       const Piece = Board[Rank][File]
@@ -66,11 +51,8 @@ function evaluateBoard(game) {
   return Score
 }
 
-/*
-  Trying captures first makes alpha-beta cut off far more branches, since finding a strong move
-  early tightens the alpha/beta window for every move checked after it. The chessprogramming wiki
-  calls this move ordering and rates it one of the biggest speedups you get basically for free.
-*/
+// Captures get searched first so alpha-beta can prune earlier (see ReleaseNotes on move ordering).
+// This is a simple heuristic that works well enough for a weak bot. (Simple human-like perspective like tunnel vision for captures)
 function orderMoves(moves) {
   return moves.slice().sort((moveA, moveB) => {
     const ScoreA = moveA.captured ? PieceValues[moveA.captured] : 0
@@ -79,19 +61,12 @@ function orderMoves(moves) {
   })
 }
 
-/*
-  Minimax walks the tree of possible move sequences assuming white always picks the highest
-  scoring branch and black the lowest. Alpha and beta carry the best score each side is already
-  guaranteed somewhere else in the tree - the moment a branch cannot beat that guarantee we stop
-  searching it. Same final answer as plain minimax, it just skips the pointless work.
-
-  One thing real engines add that I am deliberately leaving out is quiscience (heuristic) search. Stopping
-  dead at depth 0 means the engine can evaluate halfway through a queen trade and think it is up
-  a whole queen (the horizon effect, does not look in foresight). For a 400-1200 bot those misjudgements are... a feature.
-*/
+// Minimax with alpha-beta pruning. White picks the max score, black picks the min, and any
+// branch that cannot beat a score already guaranteed elsewhere gets skipped (the pruning).
+// No quiescence search on purpose - the horizon effect suits a weak bot, see ReleaseNotes 0.3.
 function minimax(game, depth, alpha, beta, isMaximising) {
   if (game.isCheckmate()){
-    return isMaximising 
+    return isMaximising
     ? -100000 - depth
     : 100000 + depth
   }
@@ -99,6 +74,7 @@ function minimax(game, depth, alpha, beta, isMaximising) {
   if (depth === 0) return evaluateBoard(game)
 
   const Moves = orderMoves(game.moves({ verbose: true }))
+
 
   if (isMaximising) {
     let BestScore = -Infinity // javascript way of using math.inf, first time for everything
@@ -112,7 +88,7 @@ function minimax(game, depth, alpha, beta, isMaximising) {
     return BestScore
   }
 
-  let BestScore = Infinity
+  let BestScore = Infinity // minimising :|
   for (const Move of Moves) {
     game.move(Move)
     BestScore = Math.min(BestScore, minimax(game, depth - 1, alpha, beta, true))
@@ -123,13 +99,8 @@ function minimax(game, depth, alpha, beta, isMaximising) {
   return BestScore
 }
 
-/*
-  Root of the search. Takes the FEN string as the abstraction boundary (same as the stockfish
-  worker takes "position fen ...") so the front end never needs to know which engine it is
-  talking to. Plays the first ply here to keep hold of the actual move objects, then lets
-  minimax score everything underneath. Equal scoring moves are collected and picked from at
-  random so the bot does not replay the identical game every time.
-*/
+// Root of the search. Takes a FEN string same as the stockfish worker does, so the app never
+// cares which engine it is talking to. Tied best moves get picked at random so games dont repeat.
 export function findBestMove(fen, levelIndex) {
   const Game = new Chess(fen)
   const Level = EngineLevels[levelIndex]

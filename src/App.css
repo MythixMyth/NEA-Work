@@ -5,6 +5,7 @@
   gap: 2rem;
   align-items: flex-start;
   justify-content: center;
+  color : rgb(0, 0, 0),
 }
 
 .Panel {
@@ -87,13 +88,13 @@
 }
 
 .ButtonRow .ModeButtonActive {
-  background: rgb(122, 46, 149);
+  background: rgb(147, 110, 46);
   color: rgb(255, 255, 255);
-  border: 1px solid rgb(122, 46, 149);
+  border: 1px solid rgb(93, 70, 29);
 }
 
 .ButtonRow .ModeButtonActive:hover {
-  background: rgb(140, 60, 168);
+  background: rgb(177, 129, 46);
 }
 
 .BotStrength {
@@ -102,7 +103,7 @@
 
 .BotStrength input {
   width: 100%;
-  accent-color: rgb(122, 46, 149);
+  accent-color: rgb(255, 201, 107);
   cursor: pointer;
 }
 
@@ -118,4 +119,84 @@
   border-radius: 12px;
   box-shadow:
     0 15px 40px rgba(0, 0, 0, 0.6);
+}
+
+.BoardArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.BoardSizer {
+  position: relative;
+}
+
+.EvalBar {
+  position: relative;
+  width: 20px;
+  border-radius: 3px;
+  background: rgb(64, 61, 57);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.EvalBarWhite {
+  background: rgb(255, 255, 255);
+  transition: height 0.4s ease;
+}
+
+.EvalText {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.55rem;
+  font-family: sans-serif;
+  color: rgb(255, 255, 255);
+  mix-blend-mode: difference; /* flips the text dark over the white half and light over the dark half */
+}
+
+.ResultOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 12px;
+}
+
+.ResultPopup {
+  background: rgb(38, 36, 33);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 1.5rem 2rem;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.ResultPopup h2 {
+  margin: 0 0 1rem 0;
+  color: rgb(255, 255, 255);
+  font-family: sans-serif;
+  font-size: 1.3rem;
+}
+
+.ResultPopup button {
+  padding: 0.5rem 1.4rem;
+  background: rgb(147, 110, 46);
+  color: rgb(255, 255, 255);
+  border: 1px solid rgb(93, 70, 29);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: sans-serif;
+  font-size: 0.95rem;
+}
+
+.ResultPopup button:hover {
+  background: rgb(177, 129, 46);
 }

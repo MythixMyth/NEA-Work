@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
-import { Chess } from 'chess.js'
-import { Chessboard } from 'react-chessboard'
-import './App.css'
+import { useState, useEffect, useRef } from 'react' // https://react.dev/reference/react
+import { Chess } from 'chess.js' // https://www.npmjs.com/package/chess.js?activeTab=readme
+import { findBestMove } from "./CustomEngine" // No documentation for this, but it is a hand-written engine for the low elo levels.
+import { evaluatePosition } from './EvaluationService' // My messaging service wrapping a dedicated stockfish worker for evaluations.
+import { Chessboard } from 'react-chessboard' // https://www.npmjs.com/package/react-chessboard?activeTab=readme
+import './App.css' // Stylesheet
 
 /*
   Using an array for bot levels, holding Dictionary for Stage, Elo.
@@ -9,11 +11,16 @@ import './App.css'
   beginners to competitive scenes.
 */
 const BotLevels = [
-  { Stage: 'Beginner', Elo: 1320 },
-  { Stage: 'Beginner', Elo: 1550 },
-  { Stage: 'Intermediate', Elo: 1850 },
-  { Stage: 'Advanced', Elo: 2250 },
-  { Stage: 'Advanced', Elo: 2750 },
+  { Stage: 'Novice', Elo: 400, Engine: 'custom' }, // New stages for true beginners to the sport
+  { Stage: 'Novice', Elo: 600, Engine: 'custom' },
+  { Stage: 'Novice', Elo: 800, Engine: 'custom' },
+  { Stage: 'Novice', Elo: 1000, Engine: 'custom' },
+  { Stage: 'Novice', Elo: 1200, Engine: 'custom' },
+  { Stage: 'Beginner', Elo: 1320, Engine: 'stockfish' }, // Original stages from first release of Bot logic.
+  { Stage: 'Beginner', Elo: 1550, Engine: 'stockfish' },
+  { Stage: 'Intermediate', Elo: 1850, Engine: 'stockfish' },
+  { Stage: 'Advanced', Elo: 2250, Engine: 'stockfish' },
+  { Stage: 'Advanced', Elo: 2750, Engine: 'stockfish' },
 ]
 
 function App() {
@@ -27,14 +34,15 @@ function App() {
   const [LoadError, setLoadError] = useState('')
   const [BoardWidth, setBoardWidth] = useState(480) // Default 480x480 boardsize.
   const [GameMode, setGameMode] = useState('local') // string-union local/bot
-  const [BotLevel, setBotLevel] = useState(3) // level ranging from 1->5
+  const [BotLevel, setBotLevel] = useState(3) // level ranging from 1->10 (1-5 custom engine, 6-10 stockfish)
   const [BotThinking, setBotThinking] = useState(false) // controlled via bot logic + gameplay loop.
+  const [Evaluation, setEvaluation] = useState({ Centipawns: 0, Mate: null }) // Always from white's perspective, courtesy of EvaluationService.
   const EngineRef = useRef(null) // Reactive Reference to the engine object for stockfish.
 
   useEffect(() => { // This is reactive effectant for devices with different aspectratios or sizes than the base 1920x1080
     function updateBoardWidth() {
-      // Reserve space for the side panel + gap + page padding
-      const Reserved = 320 + 32 + 64
+      // Reserve space for the side panel + gap + page padding + the eval bar
+      const Reserved = 320 + 32 + 64 + 32
       const Clamped = Math.min(560, Math.max(240, window.innerWidth - Reserved))
       setBoardWidth(Clamped)
     }
@@ -44,22 +52,36 @@ function App() {
   }, [])
 
   useEffect(() => { // Reactive effectant coordinating stockfish engine reference.
-    if (GameMode !== 'bot') return
+    if (GameMode === 'local') return
     if (EngineRef.current) return
+    if (BotLevels[BotLevel - 1].Engine === 'custom') return // Exit for custom engine since its a singlethread js file and does not need communication.
     const Engine = new Worker('/stockfish-18-lite-single.js')
     Engine.postMessage('uci')
     Engine.postMessage('setoption name UCI_LimitStrength value true')
     EngineRef.current = Engine
-  }, [GameMode])
+  }, [GameMode, BotLevel])
 
   useEffect(() => { // Reactive effectant controlling engine BEHAVIOR in-game for example reacting to moves - with elo coordinating.
     if (GameMode !== 'bot') return
     if (Game.turn() !== 'b') return
     if (Game.isGameOver()) return
-    const Engine = EngineRef.current
-    if (!Engine) return
 
-    setBotThinking(true)
+    if (BotLevels[BotLevel - 1].Engine === 'custom') {
+      setBotThinking(true)
+      const Timer = setTimeout(() => {
+        const BestMove = findBestMove(Game.fen(), BotLevel - 1)
+        if (BestMove) {
+          const GameCopy = copyGame()
+          GameCopy.move(BestMove)
+          setGame(GameCopy)
+        }
+        setBotThinking(false)
+      },400) // 400ms delay to simulate thinking time for the bot
+      return () => clearTimeout(Timer)
+    }
+
+    const Engine = EngineRef.current // Stockfish path only from here down, custom already returned above.
+    if (!Engine) return
 
     function handleEngineMessage(event) {
       const Line = String(event.data)
@@ -91,7 +113,15 @@ function App() {
       Engine.removeEventListener('message', handleEngineMessage)
       Engine.postMessage('stop')
     }
-  }, [Game, GameMode])
+  }, [Game, GameMode, BotLevel])
+
+  useEffect(() => { // Reactive effectant asking the evaluation service to score every new position.
+    let Cancelled = false // Guards against an old evaluation arriving AFTER a newer move already happened.
+    evaluatePosition(Game.fen()).then((Result) => {
+      if (!Cancelled) setEvaluation(Result)
+    })
+    return () => { Cancelled = true }
+  }, [Game])
 
   // early return demon
   function getStatusMessage() {
@@ -99,6 +129,32 @@ function App() {
     if (Game.isDraw()) return 'Draw'
     if (Game.isCheck()) return (Game.turn() === 'w' ? 'White' : 'Black') + ' is in check'
     return (Game.turn() === 'w' ? 'White' : 'Black') + ' to move'
+  }
+
+  // Result headline for the game-over popup. Bot mode talks TO the player since they are always white.
+  function getResultMessage() {
+    if (Game.isCheckmate()) {
+      if (GameMode === 'bot') return Game.turn() === 'w' ? 'You lost by checkmate' : 'You won by checkmate!'
+      return (Game.turn() === 'w' ? 'Black' : 'White') + ' wins by checkmate'
+    }
+    if (Game.isStalemate()) return 'Draw by stalemate'
+    if (Game.isThreefoldRepetition()) return 'Draw by repetition'
+    if (Game.isInsufficientMaterial()) return 'Draw by insufficient material'
+    return 'Draw'
+  }
+
+  // How much of the eval bar should be white, as a percentage. Clamped at +-10 pawns so the bar
+  // never fully empties from a normal advantage - only a found mate pins it to 0 or 100.
+  function getWhiteBarPercent() {
+    if (Evaluation.Mate !== null) return Evaluation.Mate > 0 ? 100 : 0
+    const Clamped = Math.min(1000, Math.max(-1000, Evaluation.Centipawns))
+    return 50 + (Clamped / 1000) * 50
+  }
+
+  // Little label on the bar, pawns to one decimal like chess.com, or 'M3' when mate was found.
+  function getEvalText() {
+    if (Evaluation.Mate !== null) return 'M' + Math.abs(Evaluation.Mate)
+    return (Evaluation.Centipawns / 100).toFixed(1)
   }
 
   // When trying moves (use of local variable vs global variable omg)
@@ -215,15 +271,29 @@ function App() {
     onSquareClick,
     squareStyles: SquareStyles,
     boardStyle: { borderRadius: '12px', cursor: 'pointer' },
-    darkSquareStyle: { backgroundColor: '#7a2e95' },
-    lightSquareStyle: { backgroundColor: '#ffffff' },
+    darkSquareStyle: { backgroundColor: '#f0d9b5' },
+    lightSquareStyle: { backgroundColor: '#b58863' },
   }
 
   return (
     <main className="Stage">
-      <div className="BoardFrame">
-        <div className="BoardSizer" style={{ width: BoardWidth }}>
-          <Chessboard options={chessboardOptions} />
+      <div className="BoardArea">
+        <div className="EvalBar" style={{ height: BoardWidth }}>
+          <div className="EvalBarWhite" style={{ height: getWhiteBarPercent() + '%' }} />
+          <span className="EvalText">{getEvalText()}</span>
+        </div>
+        <div className="BoardFrame">
+          <div className="BoardSizer" style={{ width: BoardWidth }}>
+            <Chessboard options={chessboardOptions} />
+            {Game.isGameOver() && (
+              <div className="ResultOverlay">
+                <div className="ResultPopup">
+                  <h2>{getResultMessage()}</h2>
+                  <button onClick={resetGame}>Play again</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -251,13 +321,13 @@ function App() {
               <input
                 type="range"
                 min="1"
-                max="5"
+                max="10"
                 step="1"
                 value={BotLevel}
                 onChange={(e) => setBotLevel(Number(e.target.value))}
               />
               <p className="BotStageText">
-                Level {BotLevel} of 5 — {BotLevels[BotLevel - 1].Stage}
+                Level {BotLevel} of 10 — {BotLevels[BotLevel - 1].Stage} ({BotLevels[BotLevel - 1].Elo})
               </p>
             </div>
           )}
